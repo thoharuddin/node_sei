@@ -2,7 +2,7 @@
   "name": "stock-opname-backend",
   "version": "1.0.0",
   "private": true,
-  "description": "Stock Opname (physical inventory audit) system — Node.js/Express/PostgreSQL backend",
+  "description": "Stock Opname (physical inventory audit) system \u2014 Node.js/Express/PostgreSQL backend",
   "main": "src/server.js",
   "scripts": {
     "dev": "node --watch src/server.js",

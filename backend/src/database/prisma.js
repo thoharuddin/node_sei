@@ -4,7 +4,8 @@ const { PrismaClient, Prisma } = require('@prisma/client');
 const config = require('../config');
 
 const prisma = new PrismaClient({
-  log: config.env === 'development' ? ['warn', 'error'] : ['error'],
+  // Expected constraint violations are part of the tests: don't let Prisma log them as errors.
+  log: config.isTest ? [] : ['warn', 'error'],
 });
 
 /**
