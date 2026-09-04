@@ -15,6 +15,11 @@ function dec(value) {
   return new Prisma.Decimal(value ?? 0);
 }
 
+/** Same arithmetic as the generated column audit_session_item.difference. */
+function difference(item) {
+  return dec(item.countedQuantity).minus(dec(item.systemQuantity)).toNumber();
+}
+
 const userPublic = (u) =>
   u && {
     id: u.id,
@@ -134,7 +139,8 @@ const auditSessionItem = (i) => ({
   location: locationRef(i.location),
   systemQuantity: toNum(i.systemQuantity),
   countedQuantity: toNum(i.countedQuantity),
-  difference: toNum(i.difference),
+  // mirrors the generated column audit_session_item.difference
+  difference: i.difference !== undefined ? toNum(i.difference) : difference(i),
   note: i.note,
   countedAt: i.countedAt,
   editedById: i.editedById,
@@ -199,6 +205,7 @@ const itemLog = (l) => ({
 module.exports = {
   toNum,
   dec,
+  difference,
   userPublic,
   userRef,
   productRef,

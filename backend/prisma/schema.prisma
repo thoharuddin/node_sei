@@ -225,9 +225,10 @@ model AuditSessionItem {
   locationId      Int       @map("location_id")
   systemQuantity  Decimal   @map("system_quantity") @db.Decimal(18, 3)
   countedQuantity Decimal   @map("counted_quantity") @db.Decimal(18, 3)
-  /// GENERATED ALWAYS AS (counted_quantity - system_quantity) STORED in PostgreSQL.
-  /// The @default here only tells Prisma the column may be omitted on writes — never write it.
-  difference      Decimal   @default(0) @db.Decimal(18, 3)
+  // NOTE: the table also has `difference NUMERIC GENERATED ALWAYS AS
+  // (counted_quantity - system_quantity) STORED`. It is deliberately absent from this model:
+  // Prisma would send it on createMany and PostgreSQL rejects writes to generated columns.
+  // Raw SQL (comparison, stats) uses the real column; the API serializer derives the value.
   note            String?
   countedAt       DateTime? @map("counted_at") @db.Timestamptz(6)
   editedById      Int?      @map("edited_by")

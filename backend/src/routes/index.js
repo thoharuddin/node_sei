@@ -6,6 +6,10 @@ const userRoutes = require('../modules/users/user.routes');
 const productRoutes = require('../modules/products/product.routes');
 const locationRoutes = require('../modules/locations/location.routes');
 const stockRoutes = require('../modules/stock/stock.routes');
+const programRoutes = require('../modules/audit/programs/program.routes');
+const assignmentRoutes = require('../modules/audit/assignments/assignment.routes');
+const sessionRoutes = require('../modules/audit/sessions/session.routes');
+const itemRoutes = require('../modules/audit/items/item.routes');
 
 const router = Router();
 
@@ -15,5 +19,9 @@ router.use('/users', userRoutes);
 router.use('/products', productRoutes);
 router.use('/locations', locationRoutes);
 router.use('/stock', stockRoutes);
+router.use('/audit-programs', programRoutes);
+router.use('/audit-assignments', assignmentRoutes);
+router.use('/audit-sessions', sessionRoutes);
+router.use('/audit-session-items', itemRoutes);
 
 module.exports = router;
