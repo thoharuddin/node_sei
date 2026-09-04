@@ -11,4 +11,8 @@ const getById = asyncHandler(async (req, res) => {
   res.json({ data: await service.getById(req.params.id, req.user) });
 });
 
-module.exports = { list, getById };
+const retry = asyncHandler(async (req, res) => {
+  res.json({ data: await service.retryPosting(req.params.id, req.user) });
+});
+
+module.exports = { list, getById, retry };

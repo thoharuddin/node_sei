@@ -1,6 +1,8 @@
 'use strict';
 
-const { prisma } = require('../../../database/prisma');
+const config = require('../../../config');
+const { prisma, withTransaction } = require('../../../database/prisma');
+const { enqueueStockPosting } = require('../../../queue/stock-posting.queue');
 const stockRepository = require('../../stock/stock.repository');
 const { notFound, forbidden } = require('../../../utils/errors');
 const { parsePagination, meta } = require('../../../utils/pagination');
@@ -109,4 +111,24 @@ async function getById(id, actor) {
   return serialize.stockAdjustment(row);
 }
 
-module.exports = { postAdjustment, list, getById };
+/**
+ * Re-drives a pending or failed reconciliation (Phase 7 operations tooling).
+ * Safe to call any number of times: an already posted adjustment reports back unchanged.
+ */
+async function retryPosting(id, actor) {
+  const adjustment = await prisma.stockAdjustment.findUnique({ where: { id } });
+  if (!adjustment) throw notFound(`Stock adjustment ${id} not found`);
+  if (adjustment.postingStatus === 'posted') {
+    return { adjustmentId: id, alreadyPosted: true, postingStatus: 'posted' };
+  }
+
+  if (config.stock.postingMode === 'async') {
+    const queued = await enqueueStockPosting(id, { reason: `manual_retry_by_${actor.id}` });
+    return { adjustmentId: id, alreadyPosted: false, queued };
+  }
+
+  const result = await withTransaction(prisma, async (tx) => postAdjustment(tx, id));
+  return { adjustmentId: id, ...result, postingStatus: 'posted' };
+}
+
+module.exports = { postAdjustment, list, getById, retryPosting };

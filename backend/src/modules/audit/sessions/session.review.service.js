@@ -5,6 +5,7 @@ const { prisma, withTransaction } = require('../../../database/prisma');
 const repository = require('./session.repository');
 const assignmentRepository = require('../assignments/assignment.repository');
 const adjustmentService = require('../adjustments/adjustment.service');
+const { enqueueStockPosting } = require('../../../queue/stock-posting.queue');
 const { notFound, conflict, unprocessable } = require('../../../utils/errors');
 const serialize = require('../../../utils/serialize');
 
@@ -160,8 +161,15 @@ async function approve(sessionId, payload, actor) {
       },
     });
 
-    // 7./8. post the movements and move the balance cache in this same transaction
-    const posting = await adjustmentService.postAdjustment(tx, adjustment.id);
+    // 7./8. post the movements and move the balance cache.
+    // sync  : inside this very transaction (strongest guarantee, Phase 6 behaviour)
+    // async : deferred to the BullMQ reconciliation worker so approval returns immediately
+    //         (Phase 7). The adjustment row stays `pending` until the worker posts it, so
+    //         stock_balance is never left partially updated.
+    const posting =
+      config.stock.postingMode === 'async'
+        ? { movements: 0, deferred: true }
+        : await adjustmentService.postAdjustment(tx, adjustment.id);
 
     // 9./10. mark approved
     await repository.update(
@@ -194,18 +202,43 @@ async function approve(sessionId, payload, actor) {
       adjustment: await tx.stockAdjustment.findUnique({ where: { id: adjustment.id } }),
       autoRejected: siblings.map((s) => s.id),
       posted: posting.movements,
+      deferred: Boolean(posting.deferred),
       idempotent: false,
     };
   });
 
+  // The queue is only touched AFTER the transaction commits — a job must never reference an
+  // adjustment that was rolled back.
+  let queued = null;
+  if (outcome.deferred && outcome.adjustment) {
+    try {
+      queued = await enqueueStockPosting(outcome.adjustment.id);
+    } catch (err) {
+      // Redis unavailable: fall back to posting inline so the system stays correct.
+      // Still idempotent — postAdjustment() short-circuits an already posted adjustment.
+      // eslint-disable-next-line no-console
+      console.error('[approve] enqueue failed, posting inline instead:', err.message);
+      const posted = await withTransaction(prisma, async (tx) =>
+        adjustmentService.postAdjustment(tx, outcome.adjustment.id),
+      );
+      queued = { queued: false, fallback: 'inline', movements: posted.movements };
+      outcome.posted = posted.movements;
+    }
+  }
+
   const stats = await repository.itemStats(id);
+  const adjustment = outcome.adjustment
+    ? await prisma.stockAdjustment.findUnique({ where: { id: outcome.adjustment.id }, include: { createdBy: true } })
+    : null;
+
   return {
     session: serialize.auditSession({ ...outcome.session, stats }),
-    adjustment: outcome.adjustment ? serialize.stockAdjustment(outcome.adjustment) : null,
+    adjustment: adjustment ? serialize.stockAdjustment(adjustment) : null,
     movementsPosted: outcome.posted,
     autoRejectedSessions: outcome.autoRejected || [],
     idempotent: outcome.idempotent,
     postingMode: config.stock.postingMode,
+    reconciliation: queued,
   };
 }
 

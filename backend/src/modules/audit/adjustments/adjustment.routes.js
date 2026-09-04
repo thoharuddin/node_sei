@@ -25,4 +25,10 @@ router.get(
 );
 router.get('/:id', validate({ params: z.object({ id: z.coerce.number().int().positive() }) }), controller.getById);
 
+router.post(
+  '/:id/retry-posting',
+  validate({ params: z.object({ id: z.coerce.number().int().positive() }) }),
+  controller.retry,
+);
+
 module.exports = router;

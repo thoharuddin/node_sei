@@ -12,9 +12,21 @@ const sessionRoutes = require('../modules/audit/sessions/session.routes');
 const itemRoutes = require('../modules/audit/items/item.routes');
 const adjustmentRoutes = require('../modules/audit/adjustments/adjustment.routes');
 
+const config = require('../config');
+const { queueHealth } = require('../queue/stock-posting.queue');
+const { asyncHandler } = require('../utils/async-handler');
+
 const router = Router();
 
-router.get('/health', (req, res) => res.json({ data: { status: 'ok', uptime: process.uptime() } }));
+router.get(
+  '/health',
+  asyncHandler(async (req, res) => {
+    const queue = config.stock.postingMode === 'async' ? await queueHealth() : { enabled: false };
+    res.json({
+      data: { status: 'ok', uptime: process.uptime(), stockPostingMode: config.stock.postingMode, queue },
+    });
+  }),
+);
 router.use('/auth', authRoutes);
 router.use('/users', userRoutes);
 router.use('/products', productRoutes);
