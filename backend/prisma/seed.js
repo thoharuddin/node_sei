@@ -12,7 +12,9 @@
 require('dotenv').config();
 
 const bcrypt = require('bcryptjs');
-const { PrismaClient, Prisma } = require('@prisma/client');
+const { PrismaClient } = require('@prisma/client');
+
+const stockRepository = require('../src/modules/stock/stock.repository');
 
 const prisma = new PrismaClient();
 const ROUNDS = Number(process.env.BCRYPT_ROUNDS || 10);
@@ -104,24 +106,21 @@ async function main() {
     const existing = await prisma.stockQuant.count({ where: { productId, locationId } });
     if (existing > 0) continue;
 
-    await prisma.$transaction(async (tx) => {
-      await tx.stockQuant.create({
-        data: {
-          productId,
-          locationId,
-          quantity: new Prisma.Decimal(quantity),
-          movementType: 'opening',
-          referenceType: 'seed',
-          createdById: manager.id,
-        },
-      });
-      await tx.$executeRaw`
-        INSERT INTO stock_balance (product_id, location_id, quantity, updated_at)
-        VALUES (${productId}, ${locationId}, ${quantity}::numeric, now())
-        ON CONFLICT (product_id, location_id)
-        DO UPDATE SET quantity = stock_balance.quantity + EXCLUDED.quantity, updated_at = now()
-      `;
-    });
+    // Same single write path the API uses: ledger + cache in one transaction.
+    await prisma.$transaction(async (tx) =>
+      stockRepository.postMovements(tx, {
+        actorId: manager.id,
+        movements: [
+          {
+            productId,
+            locationId,
+            quantity,
+            movementType: 'opening',
+            referenceType: 'seed',
+          },
+        ],
+      }),
+    );
     posted += 1;
   }
 

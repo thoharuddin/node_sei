@@ -5,6 +5,7 @@ const authRoutes = require('../modules/auth/auth.routes');
 const userRoutes = require('../modules/users/user.routes');
 const productRoutes = require('../modules/products/product.routes');
 const locationRoutes = require('../modules/locations/location.routes');
+const stockRoutes = require('../modules/stock/stock.routes');
 
 const router = Router();
 
@@ -13,5 +14,6 @@ router.use('/auth', authRoutes);
 router.use('/users', userRoutes);
 router.use('/products', productRoutes);
 router.use('/locations', locationRoutes);
+router.use('/stock', stockRoutes);
 
 module.exports = router;
