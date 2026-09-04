@@ -1,6 +1,7 @@
 'use strict';
 
 const service = require('./session.service');
+const reviewService = require('./session.review.service');
 const { asyncHandler } = require('../../../utils/async-handler');
 
 const list = asyncHandler(async (req, res) => {
@@ -27,4 +28,16 @@ const submit = asyncHandler(async (req, res) => {
   res.json({ data: await service.submit(req.params.id, req.body, req.user) });
 });
 
-module.exports = { list, getById, listItems, saveItems, addItem, submit };
+const approve = asyncHandler(async (req, res) => {
+  res.json({ data: await reviewService.approve(req.params.id, req.body, req.user) });
+});
+
+const reject = asyncHandler(async (req, res) => {
+  res.json({ data: await reviewService.reject(req.params.id, req.body, req.user) });
+});
+
+const reopen = asyncHandler(async (req, res) => {
+  res.json({ data: await reviewService.reopen(req.params.id, req.user) });
+});
+
+module.exports = { list, getById, listItems, saveItems, addItem, submit, approve, reject, reopen };

@@ -4,7 +4,7 @@ const { Router } = require('express');
 const controller = require('./session.controller');
 const schema = require('./session.schema');
 const { validate } = require('../../../middleware/validate');
-const { requireAuth, requireStaff } = require('../../../middleware/auth');
+const { requireAuth, requireManager, requireStaff } = require('../../../middleware/auth');
 
 const router = Router();
 
@@ -20,5 +20,10 @@ router.post('/:id/items', validate({ params: schema.idParam, body: schema.addIte
 
 // §18: only the counting staff member submits.
 router.post('/:id/submit', requireStaff, validate({ params: schema.idParam }), controller.submit);
+
+// §21/§31: approval, rejection and reopening are manager-only.
+router.post('/:id/approve', requireManager, validate({ params: schema.idParam, body: schema.approveSchema }), controller.approve);
+router.post('/:id/reject', requireManager, validate({ params: schema.idParam, body: schema.rejectSchema }), controller.reject);
+router.post('/:id/reopen', requireManager, validate({ params: schema.idParam }), controller.reopen);
 
 module.exports = router;

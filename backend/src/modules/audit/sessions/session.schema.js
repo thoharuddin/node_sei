@@ -37,4 +37,16 @@ const addItemSchema = z.object({
 
 const submitSchema = z.object({ notes: z.string().trim().max(2000).optional() }).optional();
 
-module.exports = { idParam, listQuery, saveItemsSchema, addItemSchema, submitSchema };
+const approveSchema = z.object({ notes: z.string().trim().max(2000).optional() }).optional();
+
+const rejectSchema = z.object({ reason: z.string().trim().min(3).max(1000) });
+
+module.exports = {
+  idParam,
+  listQuery,
+  saveItemsSchema,
+  addItemSchema,
+  submitSchema,
+  approveSchema,
+  rejectSchema,
+};

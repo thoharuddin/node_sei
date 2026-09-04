@@ -2,6 +2,7 @@
 
 const service = require('./assignment.service');
 const sessionService = require('../sessions/session.service');
+const reviewService = require('../sessions/session.review.service');
 const { asyncHandler } = require('../../../utils/async-handler');
 
 const list = asyncHandler(async (req, res) => {
@@ -24,4 +25,8 @@ const start = asyncHandler(async (req, res) => {
   res.status(201).json({ data: await sessionService.start(req.params.id, req.user) });
 });
 
-module.exports = { list, listMine, getById, update, start };
+const comparison = asyncHandler(async (req, res) => {
+  res.json({ data: await reviewService.comparison(req.params.id, req.user) });
+});
+
+module.exports = { list, listMine, getById, update, start, comparison };

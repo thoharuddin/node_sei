@@ -10,6 +10,7 @@ const programRoutes = require('../modules/audit/programs/program.routes');
 const assignmentRoutes = require('../modules/audit/assignments/assignment.routes');
 const sessionRoutes = require('../modules/audit/sessions/session.routes');
 const itemRoutes = require('../modules/audit/items/item.routes');
+const adjustmentRoutes = require('../modules/audit/adjustments/adjustment.routes');
 
 const router = Router();
 
@@ -23,5 +24,6 @@ router.use('/audit-programs', programRoutes);
 router.use('/audit-assignments', assignmentRoutes);
 router.use('/audit-sessions', sessionRoutes);
 router.use('/audit-session-items', itemRoutes);
+router.use('/stock-adjustments', adjustmentRoutes);
 
 module.exports = router;

@@ -125,16 +125,18 @@ async function start(assignmentId, actor) {
  *   staff   -> only their own session, only while it is draft (§18)
  *   manager -> any session before approval (§20/§34.10)
  */
+const article = (status) => (/^[aeiou]/i.test(status) ? 'An' : 'A');
+
 function assertItemsWritable(session, actor) {
   if (actor.role === 'staff') {
     if (session.staffId !== actor.id) throw forbidden('This audit session belongs to another staff member');
     if (session.status !== 'draft') {
-      throw conflict(`A ${session.status} session can no longer be edited by staff`);
+      throw conflict(`${article(session.status)} ${session.status} session can no longer be edited by staff`);
     }
     return;
   }
   if (!OPEN_STATUSES.includes(session.status)) {
-    throw conflict(`A ${session.status} session can no longer be edited`);
+    throw conflict(`${article(session.status)} ${session.status} session can no longer be edited`);
   }
 }
 
