@@ -1,0 +1,323 @@
+// Prisma schema for the Stock Opname system.
+//
+// NOTE: migrations are hand-written SQL (prisma/migrations/**/migration.sql) because the
+// schema relies on PostgreSQL features Prisma cannot express: CHECK constraints, partial
+// unique indexes, generated columns, integrity triggers and a consistency view.
+// Always apply them with `prisma migrate deploy` (never `migrate dev`, which would try to
+// "fix" that drift). This file exists so Prisma Client mirrors the real database.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  manager
+  staff
+
+  @@map("user_role")
+}
+
+enum MovementType {
+  opening
+  receipt
+  delivery
+  transfer_in
+  transfer_out
+  adjustment
+  audit_adjustment
+
+  @@map("movement_type")
+}
+
+enum AuditProgramStatus {
+  draft
+  in_progress
+  completed
+  cancelled
+
+  @@map("audit_program_status")
+}
+
+enum AssignmentType {
+  product
+  location
+
+  @@map("assignment_type")
+}
+
+enum AssignmentStatus {
+  pending
+  in_progress
+  done
+  cancelled
+
+  @@map("assignment_status")
+}
+
+enum AuditSessionStatus {
+  draft
+  submitted
+  approved
+  rejected
+  cancelled
+
+  @@map("audit_session_status")
+}
+
+enum PostingStatus {
+  pending
+  posted
+  failed
+
+  @@map("posting_status")
+}
+
+model User {
+  id           Int      @id @default(autoincrement())
+  username     String   @unique
+  passwordHash String   @map("password_hash")
+  name         String
+  email        String   @unique
+  role         UserRole
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  productsCreated   Product[]          @relation("ProductCreatedBy")
+  productsWritten   Product[]          @relation("ProductWrittenBy")
+  locationsCreated  Location[]         @relation("LocationCreatedBy")
+  locationsWritten  Location[]         @relation("LocationWrittenBy")
+  stockQuants       StockQuant[]
+  auditPrograms     AuditProgram[]
+  auditAssignments  AuditAssignment[]
+  auditSessions     AuditSession[]     @relation("SessionStaff")
+  sessionsApproved  AuditSession[]     @relation("SessionApprovedBy")
+  sessionsRejected  AuditSession[]     @relation("SessionRejectedBy")
+  stockAdjustments  StockAdjustment[]
+  itemsEdited       AuditSessionItem[]
+  itemLogs          AuditSessionItemLog[]
+
+  @@index([role, isActive])
+  @@map("users")
+}
+
+model Product {
+  id        Int      @id @default(autoincrement())
+  sku       String   @unique
+  name      String
+  isActive  Boolean  @default(true) @map("is_active")
+  createUid Int?     @map("create_uid")
+  writeUid  Int?     @map("write_uid")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  createdBy     User?              @relation("ProductCreatedBy", fields: [createUid], references: [id], onDelete: SetNull)
+  writtenBy     User?              @relation("ProductWrittenBy", fields: [writeUid], references: [id], onDelete: SetNull)
+  stockQuants   StockQuant[]
+  stockBalances StockBalance[]
+  auditItems    AuditSessionItem[]
+
+  @@index([isActive])
+  @@map("products")
+}
+
+model Location {
+  id        Int      @id @default(autoincrement())
+  code      String   @unique
+  name      String
+  parentId  Int?     @map("parent_id")
+  isActive  Boolean  @default(true) @map("is_active")
+  createUid Int?     @map("create_uid")
+  writeUid  Int?     @map("write_uid")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  parent        Location?          @relation("LocationTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children      Location[]         @relation("LocationTree")
+  createdBy     User?              @relation("LocationCreatedBy", fields: [createUid], references: [id], onDelete: SetNull)
+  writtenBy     User?              @relation("LocationWrittenBy", fields: [writeUid], references: [id], onDelete: SetNull)
+  stockQuants   StockQuant[]
+  stockBalances StockBalance[]
+  auditItems    AuditSessionItem[]
+
+  @@index([parentId])
+  @@index([isActive])
+  @@map("locations")
+}
+
+model AuditProgram {
+  id            Int                @id @default(autoincrement())
+  name          String
+  description   String?
+  auditDateFrom DateTime           @map("audit_date_from") @db.Date
+  auditDateTo   DateTime           @map("audit_date_to") @db.Date
+  status        AuditProgramStatus @default(draft)
+  createdById   Int                @map("created_by")
+  createdAt     DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime           @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  createdBy   User              @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  assignments AuditAssignment[]
+
+  @@index([status])
+  @@map("audit_program")
+}
+
+model AuditAssignment {
+  id              Int              @id @default(autoincrement())
+  auditProgramId  Int              @map("audit_program_id")
+  assignedUserIds Int[]            @map("assigned_user_ids")
+  assignmentType  AssignmentType   @map("assignment_type")
+  productIds      Int[]            @map("product_ids")
+  locationIds     Int[]            @map("location_ids")
+  status          AssignmentStatus @default(pending)
+  notes           String?
+  createdById     Int              @map("created_by")
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  program   AuditProgram   @relation(fields: [auditProgramId], references: [id], onDelete: Restrict)
+  createdBy User           @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  sessions  AuditSession[]
+
+  @@index([auditProgramId])
+  @@index([status])
+  @@map("audit_assignment")
+}
+
+model AuditSession {
+  id                Int                @id @default(autoincrement())
+  auditAssignmentId Int                @map("audit_assignment_id")
+  staffId           Int                @map("staff_id")
+  status            AuditSessionStatus @default(draft)
+  startedAt         DateTime           @default(now()) @map("started_at") @db.Timestamptz(6)
+  submittedAt       DateTime?          @map("submitted_at") @db.Timestamptz(6)
+  approvedAt        DateTime?          @map("approved_at") @db.Timestamptz(6)
+  approvedById      Int?               @map("approved_by")
+  rejectedAt        DateTime?          @map("rejected_at") @db.Timestamptz(6)
+  rejectedById      Int?               @map("rejected_by")
+  rejectionReason   String?            @map("rejection_reason")
+  notes             String?
+  createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime           @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  assignment AuditAssignment    @relation(fields: [auditAssignmentId], references: [id], onDelete: Restrict)
+  staff      User               @relation("SessionStaff", fields: [staffId], references: [id], onDelete: Restrict)
+  approvedBy User?              @relation("SessionApprovedBy", fields: [approvedById], references: [id], onDelete: Restrict)
+  rejectedBy User?              @relation("SessionRejectedBy", fields: [rejectedById], references: [id], onDelete: Restrict)
+  items      AuditSessionItem[]
+  adjustment StockAdjustment?
+
+  @@index([auditAssignmentId, status])
+  @@index([staffId, status])
+  @@map("audit_session")
+}
+
+model AuditSessionItem {
+  id              Int       @id @default(autoincrement())
+  auditSessionId  Int       @map("audit_session_id")
+  productId       Int       @map("product_id")
+  locationId      Int       @map("location_id")
+  systemQuantity  Decimal   @map("system_quantity") @db.Decimal(18, 3)
+  countedQuantity Decimal   @map("counted_quantity") @db.Decimal(18, 3)
+  /// GENERATED ALWAYS AS (counted_quantity - system_quantity) STORED in PostgreSQL.
+  /// The @default here only tells Prisma the column may be omitted on writes — never write it.
+  difference      Decimal   @default(0) @db.Decimal(18, 3)
+  note            String?
+  countedAt       DateTime? @map("counted_at") @db.Timestamptz(6)
+  editedById      Int?      @map("edited_by")
+  editedAt        DateTime? @map("edited_at") @db.Timestamptz(6)
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  session  AuditSession          @relation(fields: [auditSessionId], references: [id], onDelete: Cascade)
+  product  Product               @relation(fields: [productId], references: [id], onDelete: Restrict)
+  location Location              @relation(fields: [locationId], references: [id], onDelete: Restrict)
+  editedBy User?                 @relation(fields: [editedById], references: [id], onDelete: SetNull)
+  logs     AuditSessionItemLog[]
+
+  @@unique([auditSessionId, productId, locationId])
+  @@index([auditSessionId])
+  @@index([productId, locationId])
+  @@map("audit_session_item")
+}
+
+model AuditSessionItemLog {
+  id                 Int      @id @default(autoincrement())
+  auditSessionItemId Int      @map("audit_session_item_id")
+  field              String
+  oldValue           String?  @map("old_value")
+  newValue           String?  @map("new_value")
+  reason             String?
+  changedById        Int      @map("changed_by")
+  changedAt          DateTime @default(now()) @map("changed_at") @db.Timestamptz(6)
+
+  item      AuditSessionItem @relation(fields: [auditSessionItemId], references: [id], onDelete: Cascade)
+  changedBy User             @relation(fields: [changedById], references: [id], onDelete: Restrict)
+
+  @@index([auditSessionItemId, changedAt])
+  @@map("audit_session_item_log")
+}
+
+model StockAdjustment {
+  id             Int           @id @default(autoincrement())
+  auditSessionId Int           @unique @map("audit_session_id")
+  createdById    Int           @map("created_by")
+  notes          String?
+  postingStatus  PostingStatus @default(pending) @map("posting_status")
+  postedAt       DateTime?     @map("posted_at") @db.Timestamptz(6)
+  postingError   String?       @map("posting_error")
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  session   AuditSession @relation(fields: [auditSessionId], references: [id], onDelete: Restrict)
+  createdBy User         @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  quants    StockQuant[]
+
+  @@index([postingStatus])
+  @@map("stock_adjustment")
+}
+
+model StockQuant {
+  id            Int          @id @default(autoincrement())
+  productId     Int          @map("product_id")
+  locationId    Int          @map("location_id")
+  quantity      Decimal      @db.Decimal(18, 3)
+  movementType  MovementType @map("movement_type")
+  referenceType String?      @map("reference_type")
+  referenceId   Int?         @map("reference_id")
+  adjustmentId  Int?         @map("adjustment_id")
+  createdById   Int          @map("created_by")
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  product    Product          @relation(fields: [productId], references: [id], onDelete: Restrict)
+  location   Location         @relation(fields: [locationId], references: [id], onDelete: Restrict)
+  adjustment StockAdjustment? @relation(fields: [adjustmentId], references: [id], onDelete: Restrict)
+  createdBy  User             @relation(fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([productId, locationId, id])
+  @@index([locationId])
+  @@index([createdAt])
+  @@index([adjustmentId])
+  @@index([movementType])
+  @@map("stock_quant")
+}
+
+model StockBalance {
+  id         Int      @id @default(autoincrement())
+  productId  Int      @map("product_id")
+  locationId Int      @map("location_id")
+  quantity   Decimal  @default(0) @db.Decimal(18, 3)
+  updatedAt  DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  product  Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  location Location @relation(fields: [locationId], references: [id], onDelete: Restrict)
+
+  @@unique([productId, locationId])
+  @@index([locationId])
+  @@map("stock_balance")
+}
