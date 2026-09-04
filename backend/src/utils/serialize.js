@@ -112,7 +112,15 @@ const auditProgram = (p) => ({
 const auditAssignment = (a) => ({
   id: a.id,
   auditProgramId: a.auditProgramId,
-  program: a.program ? { id: a.program.id, name: a.program.name, status: a.program.status } : undefined,
+  program: a.program
+    ? {
+        id: a.program.id,
+        name: a.program.name,
+        status: a.program.status,
+        auditDateFrom: a.program.auditDateFrom,
+        auditDateTo: a.program.auditDateTo,
+      }
+    : undefined,
   assignedUserIds: a.assignedUserIds,
   assignedUsers: a.assignedUsers ? a.assignedUsers.map(userRef) : undefined,
   assignmentType: a.assignmentType,
